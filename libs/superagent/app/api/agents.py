@@ -7,6 +7,8 @@ import segment.analytics as analytics
 from decouple import config
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from langchain.agents import AgentExecutor
+from langchain.chains import LLMChain
 from langfuse import Langfuse
 from langfuse.model import CreateTrace
 from langsmith import Client
@@ -95,13 +97,25 @@ async def create(body: AgentRequest, api_user=Depends(get_current_api_user)):
     description="List all agents",
     response_model=AgentListResponse,
 )
-async def list(api_user=Depends(get_current_api_user)):
+async def list(api_user=Depends(get_current_api_user), skip: int = 0, take: int = 50):
     """Endpoint for listing all agents"""
     try:
+        import math
+
         data = await prisma.agent.find_many(
-            take=100, where={"apiUserId": api_user.id}, include={"llms": True}
+            skip=skip,
+            take=take,
+            where={"apiUserId": api_user.id},
+            include={"llms": True},
         )
-        return {"success": True, "data": data}
+
+        # Get the total count of agents
+        total_count = await prisma.agent.count(where={"apiUserId": api_user.id})
+
+        # Calculate the total number of pages
+        total_pages = math.ceil(total_count / take)
+
+        return {"success": True, "data": data, "total_pages": total_pages}
     except Exception as e:
         handle_exception(e)
 
@@ -125,6 +139,9 @@ async def get(agent_id: str, api_user=Depends(get_current_api_user)):
         )
         for llm in data.llms:
             llm.llm.options = json.dumps(llm.llm.options)
+        for tool in data.tools:
+            if isinstance(tool.tool.toolConfig, dict):
+                tool.tool.toolConfig = json.dumps(tool.tool.toolConfig)
         return {"success": True, "data": data}
     except Exception as e:
         handle_exception(e)
@@ -205,7 +222,9 @@ async def invoke(
         langfuse_handler = trace.get_langchain_handler()
 
     async def send_message(
-        agent: AgentBase, content: str, callback: CustomAsyncIteratorCallbackHandler
+        agent: LLMChain | AgentExecutor,
+        content: str,
+        callback: CustomAsyncIteratorCallbackHandler,
     ) -> AsyncIterable[str]:
         try:
             task = asyncio.ensure_future(

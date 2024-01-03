@@ -39,6 +39,7 @@ class Datasource(BaseModel):
     content: Optional[str]
     url: Optional[str]
     metadata: Optional[Dict[Any, Any]]
+    vectorDbProvider: Optional[str]  # vector database provider
 
 
 class Tool(BaseModel):
@@ -46,7 +47,7 @@ class Tool(BaseModel):
     description: str
     type: str
     metadata: Optional[Dict[Any, Any]]
-    returnDirect: Optional[bool]
+    returnDirect: bool
 
 
 class AgentTool(BaseModel):
@@ -67,10 +68,14 @@ class Workflow(BaseModel):
 class WorkflowStep(BaseModel):
     order: int
     agentId: str
-    input: str
-    output: str
 
 
 class WorkflowInvoke(BaseModel):
     input: str
     enableStreaming: bool
+    sessionId: Optional[str]
+
+
+class VectorDb(BaseModel):
+    provider: str
+    options: Dict

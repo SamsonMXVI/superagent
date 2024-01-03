@@ -39,17 +39,19 @@ class AgentBase:
     async def _get_memory(self) -> List:
         raise NotImplementedError
 
-    async def get_agent(self) -> Any:
+    async def get_agent(self):
         agent_config = await prisma.agent.find_unique_or_raise(
             where={"id": self.agent_id},
             include={
                 "llms": {"include": {"llm": True}},
-                "datasources": {"include": {"datasource": True}},
+                "datasources": {
+                    "include": {"datasource": {"include": {"vectorDb": True}}}
+                },
                 "tools": {"include": {"tool": True}},
             },
         )
 
-        if agent_config.llms[0].llm.provider == "OPENAI":
+        if agent_config.llms[0].llm.provider in ["OPENAI", "AZURE_OPENAI"]:
             from app.agents.langchain import LangchainAgent
 
             agent = LangchainAgent(
